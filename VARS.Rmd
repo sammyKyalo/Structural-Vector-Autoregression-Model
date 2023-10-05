@@ -1,0 +1,279 @@
+---
+title: "VARS"
+output:
+  html_document: default
+  pdf_document: default
+date: "2023-09-27"
+---
+```{r}
+pacman::p_load(janitor, forecast, zoo, tidyverse, tseries, mFilter, urca, vars)
+```
+
+
+```{r}
+macro <- read.csv("C:/Users/ELITEBOOK/Downloads/NZ Dataset 6.csv") %>% clean_names()
+```
+
+
+```{r}
+head(macro)
+```
+
+```{r}
+colnames(macro)
+```
+#Checking for missing values
+```{r}
+Missing_values <- colSums(is.na(macro))
+Missing_values <- data.frame(Missing_values)
+Missing_values
+```
+
+
+
+#convert to time series Object
+```{r}
+ HhL <- ts(macro$"hh_l_nz_dm", start = c(1999,1,1), frequency = 4)
+ HhL.Yd <- ts(macro$"hh_l_of_hh_yd", start = c(1999,1,1), frequency = 4)
+ HhLo <- ts(macro$"h_ing_loans_nz_dm", start = c(1999,1,1), frequency = 4)
+ i<- ts(macro$"i", start = c(1999,1,1), frequency = 4)
+ HPI <- ts(macro$"hpi_index", start = c(1999,1,1), frequency = 4)
+ GDP <- ts(macro$"gdp_nz_dm", start = c(1999,1,1), frequency = 4)
+ RGDP <- ts(macro$"real_gdp_r_nz_dm", start = c(1999,1,1), frequency = 4)
+ CPI <- ts(macro$"cpi_y_y", start = c(1999,1,1), frequency = 4)
+ Ex <- ts(macro$'ex_av', start = c(1999,1,1), frequency = 4)
+ REx <- ts(macro$"real_ex_index", start = c(1999,1,1), frequency = 4)
+ Def <- ts(macro$"gdp_def_index", start = c(1999,1,1), frequency = 4)
+ HhYd <- ts(macro$"hh_yd_nz_dm", start = c(1999,1,1), frequency = 4)
+ HhLo.Yd <- ts(macro$'h_ing_loans_of_hh_yd',start = c(1999,1,1), frequency = 4)
+
+```
+#Checking datatypes
+
+```{r}
+
+variables <- c(HhLo, i, HPI, REx, RGDP, CPI)
+class(variables)
+
+
+```
+
+
+#Generating time series plots
+
+```{r}
+plot(HPI, main = "House Price Index", xlab = "Date", ylab = "House Price Index",col = "brown")
+plot(i, main = "Interest Rate", xlab = 'Date', ylab = 'Interest rate(%)',col = "green")
+plot(HhLo, main = "Housing Loans", xlab = 'Date', ylab = "Housing Loans",col="pink")
+plot(RGDP, main = "Real GDP", xlab = "Date", ylab = "Real GDP",col="orange")
+plot(CPI, main = "Inflation", xlab = "Date", ylab = "Inflation",col = 'red')
+plot(REx, main = "Real Exchange Index", xlab = "Date", ylab = "Real Exchange Index", col = 'purple')
+
+```
+#Deflating House loans by Dividing House loans by deflator to have inflation-adjusted value of house loans 
+
+```{r}
+HhLoDef <- HhLo/Def
+plot(HhLoDef, main = "Deflated House Loans", xlab = "Date", ylab="inflation-adjusted value of housing loans", col='blue')
+
+```
+
+```{r}
+
+par(mfrow = c(2, 3))
+
+
+bg_color <- "#f0f0f0"  
+plot_colors <- c("blue", "green", "red", "purple", "orange","pink")
+
+plot(HPI, main = "House Price Index", xlab = "Date", ylab = "House Price Index", col = plot_colors[1], bg = bg_color)
+plot(i, main = "Interest Rate", xlab = 'Date', ylab = 'Interest rate(%)', col = plot_colors[2], bg = bg_color)
+plot(HhLo, main = "Housing Loans", xlab = 'Date', ylab = "Housing Loans", col = plot_colors[3], bg = bg_color)
+plot(RGDP, main = "Real GDP", xlab = "Date", ylab = "Real GDP", col = plot_colors[4], bg = bg_color)
+plot(CPI, main = "CPI", xlab = "Date", ylab = "CPI", col = plot_colors[5], bg = bg_color)
+plot(REx, main = "Real Exchange Index", xlab = "Date", ylab = "Real Exchange Index", col = plot_colors[6], bg = bg_color)
+
+par(mfrow = c(1, 1))
+
+
+```
+
+
+
+
+#Checking for Stationarity
+```{r}
+
+check_stationarity <- function(data, variable_name) {
+  adf_test <- adf.test(data, alternative = "stationary")
+  cat("Variable:", variable_name, "\n")
+  cat("ADF Statistic:", adf_test$statistic, "\n")
+  cat("p-value:", adf_test$p.value, "\n")
+  cat("Critical values:", adf_test$critical, "\n")
+  
+  if (adf_test$p.value < 0.05) {
+    cat("Result: The series is likely stationary at a 5% significance level.\n")
+  } else {
+    cat("Result: The series is likely non-stationary at a 5% significance level.\n")
+  }
+  cat("\n")
+}
+
+
+check_stationarity(HPI, "HPI")
+check_stationarity(i, "i")
+check_stationarity(REx, "REx")
+check_stationarity(RGDP, "RGDP")
+check_stationarity(CPI, "CPI")
+check_stationarity(HhLoDef, "HhLoDef")
+
+  
+
+```
+```{r}
+data <- cbind(HPI,i,REx,RGDP,CPI,HhLoDef)
+
+num_diff <- sapply(data, FUN = function(x) ndiffs(x))
+
+print(num_diff)
+```
+
+
+```{r}
+HPI <- diff(diff(HPI))
+i <- diff(i)
+REx <- diff(REx)
+RGDP <- diff(RGDP)
+CPI <- diff(CPI)
+HhLoDef <- diff(HhLoDef)
+```
+
+
+```{r}
+data <- cbind(HPI,i,REx,RGDP,CPI,HhLoDef)
+data <- as.data.frame(lapply(data, function(x) {
+  na.locf(x, fromLast = TRUE)
+}))
+
+```
+
+
+
+
+```{r}
+head(data)
+```
+
+
+
+
+#Lag order Selection
+```{r}
+lagselect <- VARselect(data, lag.max=10, type= 'both')
+```
+#this code is used to determine the optimal lag order for your VAR model, which is important for accurately capturing the dynamics and relationships among the variables in your time series data.
+
+```{r}
+lagselect$selection
+```
+
+```{r}
+
+VARselect(data)
+```
+
+
+#Estimating the Model
+```{r}
+var_model <- VAR(data, p = 10, type= "both")
+
+```
+
+```{r}
+summary(var_model,equation = "HPI" )
+
+```
+
+#Building the restrictions
+
+```{r}
+input_matrix <- matrix(0, nrow = 6, ncol = 6, dimnames = list(c("HPI", "i", "REx", "RGDP", "CPI", "HhLoDef"), c("HPI", "i", "REx", "RGDP", "CPI", "HhLoDef")))
+
+Amat <- matrix(NA, nrow = nrow(input_matrix), ncol = ncol(input_matrix), dimnames = dimnames(input_matrix))
+
+diag(Amat) <- 1
+
+Amat[upper.tri(Amat)] <- 0
+Amat['i','REx'] = NA
+Amat['i','RGDP'] = NA
+Amat['i','CPI'] = 1
+Amat['i','HhLoDef'] = NA
+
+print(Amat)
+
+```
+
+
+#SVAR Model
+```{r}
+SVAR_model <- SVAR(var_model, Amat = Amat, Bmat = NULL)
+SVAR_model
+```
+#Impulse Response Function
+#How HPI responds to a shock on itself
+```{r}
+SVARHPI <- irf(SVAR_model, impulse= "HPI", response = "HPI")
+SVARHPI
+plot(SVARHPI)
+```
+
+
+#How HPI responds to a shock from interest rate
+```{r}
+SVARi <- irf(SVAR_model, impulse="i", response="HPI")
+SVARi
+plot(SVARi)
+```
+
+
+#How HPI responds to a shock from RGDP
+```{r}
+SVARRGDP <- irf(SVAR_model, impulse = "RGDP", response = "HPI")
+plot(SVARRGDP)
+```
+
+
+
+
+
+#How HPI responds to a shock from CPI
+```{r}
+SVARCPI <- irf(SVAR_model, impulse = 'CPI', response= 'HPI')
+plot(SVARCPI)
+```
+
+
+
+#How HPI responds to a shock HhLoDef
+```{r}
+SVARHhLoDef <- irf(SVAR_model, impulse='HhLoDef', response = "HPI")
+plot(SVARHhLoDef)
+```
+
+
+
+
+#How HPI respond to a shock from REx
+```{r}
+SVARREx <- irf(SVAR_model, impusle='REx', response='HPI')
+plot(SVARREx)
+```
+
+
+
+
+
+
+
+
+
